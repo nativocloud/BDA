@@ -814,3 +814,5 @@ create_interactive_html(
 ---
 
 In the next book, we will explore visualization and monitoring techniques for fake news detection, including dashboard creation, alert systems, and integration with tools like Grafana.
+
+# Last modified: May 29, 2025

@@ -204,3 +204,5 @@ The Databricks Community Edition environment includes:
 ## 11. Conclusion
 
 The technical architecture described in this document provides a comprehensive framework for developing, deploying, and maintaining the Fake News Detection system. The architecture is designed to be modular, scalable, and adaptable to changing requirements, while ensuring reproducibility and maintainability.
+
+# Last modified: May 29, 2025

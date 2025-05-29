@@ -132,3 +132,5 @@ def create_graphx_features(spark, df, output_col="graphx_features"):
     result_df = assembler.transform(features_df)
     
     return result_df
+
+# Last modified: May 29, 2025

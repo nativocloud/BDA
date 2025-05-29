@@ -81,3 +81,5 @@ The import helper works identically in both environments.
 2. **Use %run** for simple, one-off imports in notebooks
 3. **Keep __init__.py files** in all directories to maintain proper package structure
 4. **Document import patterns** in notebook comments for team reference
+
+# Last modified: May 29, 2025

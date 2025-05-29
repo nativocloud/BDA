@@ -94,3 +94,5 @@ This document summarizes key insights from the paper "A benchmark study of machi
 ## Conclusion
 
 The benchmark study provides valuable insights that validate and enhance our approach. By incorporating these findings, we can ensure our fake news detection system leverages the most effective techniques while being adaptable to different resource constraints and application scenarios.
+
+# Last modified: May 29, 2025

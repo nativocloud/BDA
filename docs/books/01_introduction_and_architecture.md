@@ -164,3 +164,5 @@ Both approaches are implemented using PySpark for distributed processing, enabli
 ---
 
 In the next book, we will explore the data preprocessing and feature engineering components of the fake news detection system, focusing on techniques for text analysis, entity extraction, and feature representation.
+
+# Last modified: May 29, 2025

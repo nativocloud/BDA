@@ -34,3 +34,5 @@
 - [ ] Update step-by-step tutorial with latest changes
 - [ ] Ensure all documentation reflects current implementation
 - [ ] Create quick-start guide for new users
+
+# Last modified: May 29, 2025

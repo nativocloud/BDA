@@ -354,3 +354,5 @@ test_processed = model.transform(test_data)
 ---
 
 In the next book, we will explore the machine learning models used in our fake news detection system, including traditional algorithms, deep learning approaches, and graph-based methods.
+
+# Last modified: May 29, 2025

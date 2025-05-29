@@ -145,3 +145,5 @@ The streaming component produces:
 3. Shu, Kai, et al. "Fake News Detection on Social Media: A Data Mining Perspective." ACM SIGKDD Explorations Newsletter 19, no. 1 (2017): 22-36.
 4. Zhou, Xinyi, and Reza Zafarani. "A Survey of Fake News: Fundamental Theories, Detection Methods, and Opportunities." ACM Computing Surveys 53, no. 5 (2020): 1-40.
 5. Databricks Documentation. "Structured Streaming Programming Guide." Accessed May 2025. https://docs.databricks.com/structured-streaming/index.html
+
+# Last modified: May 29, 2025

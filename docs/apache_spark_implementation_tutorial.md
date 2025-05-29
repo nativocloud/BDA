@@ -928,3 +928,5 @@ Loaded model AUC: 0.9912
 This tutorial has demonstrated how to implement a complete fake news detection pipeline using Apache Spark locally, including text preprocessing, feature engineering, model training, and graph-based analysis. The implementation leverages Spark's distributed processing capabilities to efficiently handle large-scale text data and complex graph operations.
 
 When moving to Databricks Community Edition, you'll benefit from a more integrated environment, better visualization tools, and optimized performance, but you'll need to adapt to the limitations of the Community Edition, particularly in terms of cluster size and available resources.
+
+# Last modified: May 29, 2025

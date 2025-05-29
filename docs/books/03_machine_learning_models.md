@@ -583,3 +583,5 @@ print(f"Naive Bayes AUC: {nb_auc}")
 ---
 
 In the next book, we will explore the streaming pipeline implementation for real-time fake news detection, including data ingestion, processing, and serving components.
+
+# Last modified: May 29, 2025

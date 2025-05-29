@@ -342,3 +342,5 @@ def load_transformer_model(model_path):
     print(f"Tokenizer loaded from {os.path.join(model_path, 'tokenizer')}")
     
     return model, tokenizer
+
+# Last modified: May 29, 2025

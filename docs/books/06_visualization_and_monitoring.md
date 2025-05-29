@@ -388,3 +388,5 @@ alert_query = alerts \
 ---
 
 In the final book, we will provide a step-by-step tutorial for implementing the complete fake news detection system in Databricks Community Edition, consolidating all the techniques and code discussed throughout the series.
+
+# Last modified: May 29, 2025

@@ -460,3 +460,5 @@ For the streaming pipeline, we use:
 ## 9. Conclusion
 
 This document provides a comprehensive guide to data ingestion for the Fake News Detection system. By following these steps and best practices, you can ensure reliable, reproducible, and efficient data processing for both offline model training and online streaming classification.
+
+# Last modified: May 29, 2025

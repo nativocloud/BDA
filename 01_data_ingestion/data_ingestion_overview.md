@@ -147,3 +147,5 @@ After data ingestion, the pipeline proceeds to:
 3. **Model Training**: Train machine learning models for fake news detection
 
 The ingested data is made available to these subsequent steps through Hive tables and DBFS Parquet files.
+
+# Last modified: May 29, 2025

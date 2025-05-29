@@ -160,3 +160,5 @@ The graph analysis component produces:
 3. Gonzalez, Joseph E., et al. "GraphX: Graph Processing in a Distributed Dataflow Framework." 11th USENIX Symposium on Operating Systems Design and Implementation (OSDI 14), 2014.
 4. Hagberg, Aric A., Daniel A. Schult, and Pieter J. Swart. "Exploring Network Structure, Dynamics, and Function using NetworkX." Proceedings of the 7th Python in Science Conference (SciPy 2008), 2008.
 5. Wu, Liang, and Huan Liu. "Tracing Fake-News Footprints: Characterizing Social Media Messages by How They Propagate." Proceedings of the Eleventh ACM International Conference on Web Search and Data Mining, 2018.
+
+# Last modified: May 29, 2025

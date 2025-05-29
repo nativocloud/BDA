@@ -129,3 +129,5 @@ Academic research demonstrates that deep learning approaches, particularly trans
 [^2]: Almandouh, Mohammed E., Mohammed F. Alrahmawy, Mohamed Eisa, Mohamed Elhoseny, and A. S. Tolba. "Ensemble Based High Performance Deep Learning Models for Fake News Detection." Scientific Reports 14, no. 1 (November 4, 2024): 26591. https://doi.org/10.1038/s41598-024-76286-0.
 
 [^3]: Mouratidis, Despoina, Andreas Kanavos, and Katia Kermanidis. "From Misinformation to Insight: Machine Learning Strategies for Fake News Detection." Information 16, no. 3 (February 28, 2025): 189. https://doi.org/10.3390/info16030189.
+
+# Last modified: May 29, 2025

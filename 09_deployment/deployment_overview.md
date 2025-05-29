@@ -127,3 +127,5 @@ The deployment component produces several outputs:
 2. Databricks Documentation. "Initialization Scripts." Accessed May 2025. https://docs.databricks.com/clusters/init-scripts.html
 3. Jupytext Documentation. "Jupytext: Jupyter Notebooks as Markdown Documents, Julia, Python or R Scripts." Accessed May 2025. https://jupytext.readthedocs.io/
 4. Zaharia, Matei, et al. "Apache Spark: A Unified Engine for Big Data Processing." Communications of the ACM 59, no. 11 (2016): 56-65.
+
+# Last modified: May 29, 2025

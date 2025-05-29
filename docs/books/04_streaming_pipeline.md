@@ -485,3 +485,5 @@ query = output_df \
 ---
 
 In the next book, we will explore graph-based analysis for fake news detection, focusing on network structure, influence propagation, and entity relationships.
+
+# Last modified: May 29, 2025

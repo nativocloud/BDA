@@ -218,3 +218,5 @@ def load_lstm_model(model_path, tokenizer_path):
     print(f"Tokenizer loaded from {tokenizer_path}")
     
     return model, tokenizer
+
+# Last modified: May 29, 2025

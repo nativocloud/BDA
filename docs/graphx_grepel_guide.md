@@ -570,3 +570,5 @@ The approaches outlined in this guide can be extended and customized based on sp
 4. Zaharia, Matei, et al. "Apache Spark: A Unified Engine for Big Data Processing." Communications of the ACM 59, no. 11 (2016): 56-65.
 5. Gonzalez, Joseph E., et al. "GraphX: Graph Processing in a Distributed Dataflow Framework." OSDI, 2014.
 6. Malewicz, Grzegorz, et al. "Pregel: A System for Large-Scale Graph Processing." SIGMOD, 2010.
+
+# Last modified: May 29, 2025

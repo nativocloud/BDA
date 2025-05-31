@@ -1,13 +1,13 @@
 # %% [markdown]
 # # Fake News Detection: Data Ingestion
 # 
-# Este notebook contém todo o código necessário para carregar, processar e preparar os dados para o projeto de deteção de notícias falsas. O código está organizado em funções independentes, sem dependências de módulos externos ou classes, para facilitar a execução no Databricks Community Edition.
+# This notebook contains all the necessary code to load, process, and prepare data for the fake news detection project. The code is organized into independent functions, without dependencies on external modules or classes, to facilitate execution in Databricks Community Edition.
 
 # %% [markdown]
 # ## Setup and Imports
 
 # %%
-# Importar bibliotecas necessárias
+# Import necessary libraries
 import os
 import pandas as pd
 import numpy as np
@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # %%
-# Inicializar a sessão Spark com suporte ao Hive
+# Initialize Spark session with Hive support
 spark = SparkSession.builder \
     .appName("FakeNewsDetection") \
     .config("spark.sql.shuffle.partitions", "8") \
@@ -27,229 +27,341 @@ spark = SparkSession.builder \
     .enableHiveSupport() \
     .getOrCreate()
 
-# Mostrar a versão do Spark
+# Show Spark version
 print(f"Spark version: {spark.version}")
 print(f"Shuffle partitions: {spark.conf.get('spark.sql.shuffle.partitions')}")
 print(f"Driver memory: {spark.conf.get('spark.driver.memory')}")
 
 # %% [markdown]
-# ## Funções Reutilizáveis
-
-# %% [markdown]
-# ### Funções de Carregamento de Dados
+# ## Directory Structure Setup
 
 # %%
-def load_csv_files(fake_path, true_path):
+def create_directory_structure(base_dir="/dbfs/FileStore/fake_news_detection"):
     """
-    Carrega os ficheiros CSV de notícias falsas e verdadeiras.
+    Creates the necessary directory structure for the fake news detection project.
+    
+    This function ensures all required directories exist in the Databricks environment.
+    It's essential to run this function before executing the rest of the pipeline.
     
     Args:
-        fake_path (str): Caminho para o ficheiro CSV de notícias falsas
-        true_path (str): Caminho para o ficheiro CSV de notícias verdadeiras
+        base_dir (str): Base directory for the project
         
     Returns:
-        tuple: (fake_df, true_df) DataFrames com os dados carregados
+        dict: Dictionary with paths to all created directories
     """
-    print(f"A carregar ficheiros CSV de {fake_path} e {true_path}...")
+    print(f"Creating directory structure in {base_dir}...")
     
-    # Carregar ficheiros CSV
+    # Define directory paths
+    directories = {
+        "data": f"{base_dir}/data",
+        "raw_data": f"{base_dir}/data/raw",
+        "processed_data": f"{base_dir}/data/processed",
+        "sample_data": f"{base_dir}/data/sample",
+        "models": f"{base_dir}/models",
+        "logs": f"{base_dir}/logs",
+        "visualizations": f"{base_dir}/visualizations",
+        "temp": f"{base_dir}/temp"
+    }
+    
+    # Create directories
+    for dir_name, dir_path in directories.items():
+        # Use dbutils in Databricks environment
+        try:
+            dbutils.fs.mkdirs(dir_path)
+            print(f"Created directory: {dir_path}")
+        except NameError:
+            # Fallback for non-Databricks environments
+            os.makedirs(dir_path.replace("/dbfs", ""), exist_ok=True)
+            print(f"Created directory: {dir_path} (local mode)")
+    
+    print("Directory structure created successfully")
+    return directories
+
+# %% [markdown]
+# ## Reusable Functions
+
+# %% [markdown]
+# ### Data Loading Functions
+
+# %%
+def load_csv_files(fake_path, true_path, cache=True):
+    """
+    Loads CSV files containing fake and true news articles.
+    
+    Args:
+        fake_path (str): Path to the CSV file with fake news
+        true_path (str): Path to the CSV file with true news
+        cache (bool): Whether to cache the DataFrames in memory
+        
+    Returns:
+        tuple: (fake_df, true_df) DataFrames with loaded data
+    """
+    print(f"Loading CSV files from {fake_path} and {true_path}...")
+    
+    # Load CSV files
     fake_df = spark.read.csv(fake_path, header=True, inferSchema=True)
     true_df = spark.read.csv(true_path, header=True, inferSchema=True)
     
-    # Adicionar etiquetas (0 para falsas, 1 para verdadeiras)
+    # Add labels (0 for fake, 1 for true)
     fake_df = fake_df.withColumn("label", lit(0))
     true_df = true_df.withColumn("label", lit(1))
     
-    # Mostrar informações sobre os DataFrames
-    print(f"Notícias falsas carregadas: {fake_df.count()} registos")
-    print(f"Notícias verdadeiras carregadas: {true_df.count()} registos")
+    # Cache DataFrames if requested (improves performance for multiple operations)
+    if cache:
+        fake_df.cache()
+        true_df.cache()
+    
+    # Show information about the DataFrames
+    print(f"Fake news loaded: {fake_df.count()} records")
+    print(f"True news loaded: {true_df.count()} records")
+    
+    # Analyze subject distribution for data leakage detection
+    analyze_subject_distribution(fake_df, true_df)
     
     return fake_df, true_df
 
 # %%
-def create_hive_tables(fake_df, true_df, fake_table_name="fake", true_table_name="real"):
+def analyze_subject_distribution(fake_df, true_df):
     """
-    Cria tabelas Hive para os DataFrames de notícias falsas e verdadeiras.
+    Analyzes the distribution of subjects in fake and true news datasets to detect potential data leakage.
     
     Args:
-        fake_df: DataFrame com notícias falsas
-        true_df: DataFrame com notícias verdadeiras
-        fake_table_name (str): Nome da tabela Hive para notícias falsas
-        true_table_name (str): Nome da tabela Hive para notícias verdadeiras
+        fake_df: DataFrame with fake news
+        true_df: DataFrame with true news
     """
-    print(f"A criar tabelas Hive '{fake_table_name}' e '{true_table_name}'...")
+    print("\nAnalyzing subject distribution for potential data leakage...")
     
-    # Criar tabela para notícias falsas
+    # Check if subject column exists in both DataFrames
+    if "subject" in fake_df.columns and "subject" in true_df.columns:
+        # Get subject distribution in fake news
+        print("Subject distribution in fake news:")
+        fake_subjects = fake_df.groupBy("subject").count().orderBy("count", ascending=False)
+        fake_subjects.show(truncate=False)
+        
+        # Get subject distribution in true news
+        print("Subject distribution in true news:")
+        true_subjects = true_df.groupBy("subject").count().orderBy("count", ascending=False)
+        true_subjects.show(truncate=False)
+        
+        # Check for potential data leakage
+        print("\nDATA LEAKAGE WARNING:")
+        print("The 'subject' column may cause data leakage as it perfectly separates fake from true news.")
+        print("Fake news articles are predominantly labeled with subjects like 'News', while")
+        print("true news articles are labeled with subjects like 'politicsNews'.")
+        print("This column should be removed before model training to prevent unrealistic performance.")
+    else:
+        print("No 'subject' column found in the datasets.")
+
+# %%
+def create_hive_tables(fake_df, true_df, fake_table_name="fake", true_table_name="real"):
+    """
+    Creates Hive tables for fake and true news DataFrames.
+    
+    Args:
+        fake_df: DataFrame with fake news
+        true_df: DataFrame with true news
+        fake_table_name (str): Name of the Hive table for fake news
+        true_table_name (str): Name of the Hive table for true news
+    """
+    print(f"Creating Hive tables '{fake_table_name}' and '{true_table_name}'...")
+    
+    # Create table for fake news
     spark.sql(f"DROP TABLE IF EXISTS {fake_table_name}")
     fake_df.write.mode("overwrite").saveAsTable(fake_table_name)
-    print(f"Tabela '{fake_table_name}' criada com sucesso")
+    print(f"Table '{fake_table_name}' created successfully")
     
-    # Criar tabela para notícias verdadeiras
+    # Create table for true news
     spark.sql(f"DROP TABLE IF EXISTS {true_table_name}")
     true_df.write.mode("overwrite").saveAsTable(true_table_name)
-    print(f"Tabela '{true_table_name}' criada com sucesso")
+    print(f"Table '{true_table_name}' created successfully")
     
-    # Verificar se as tabelas foram criadas corretamente
-    print("\nTabelas disponíveis no catálogo:")
+    # Verify that tables were created correctly
+    print("\nAvailable tables in catalog:")
     spark.sql("SHOW TABLES").show()
 
 # %%
-def load_data_from_hive(fake_table_name="fake", true_table_name="real"):
+def load_data_from_hive(fake_table_name="fake", true_table_name="real", cache=True):
     """
-    Carrega dados das tabelas Hive.
+    Loads data from Hive tables.
     
     Args:
-        fake_table_name (str): Nome da tabela Hive com notícias falsas
-        true_table_name (str): Nome da tabela Hive com notícias verdadeiras
+        fake_table_name (str): Name of the Hive table with fake news
+        true_table_name (str): Name of the Hive table with true news
+        cache (bool): Whether to cache the DataFrames in memory
         
     Returns:
-        tuple: (true_df, fake_df) DataFrames com os dados carregados
+        tuple: (true_df, fake_df) DataFrames with loaded data
     """
-    print(f"A carregar dados das tabelas Hive '{true_table_name}' e '{fake_table_name}'...")
+    print(f"Loading data from Hive tables '{true_table_name}' and '{fake_table_name}'...")
     
-    # Verificar se as tabelas existem
+    # Check if tables exist
     tables = [row.tableName for row in spark.sql("SHOW TABLES").collect()]
     
     if true_table_name not in tables or fake_table_name not in tables:
-        raise ValueError(f"As tabelas Hive '{true_table_name}' e/ou '{fake_table_name}' não existem")
+        raise ValueError(f"Hive tables '{true_table_name}' and/or '{fake_table_name}' do not exist")
     
-    # Carregar dados das tabelas Hive
+    # Load data from Hive tables
     true_df = spark.table(true_table_name)
     fake_df = spark.table(fake_table_name)
     
-    # Registar como vistas temporárias para consultas SQL
+    # Cache DataFrames if requested
+    if cache:
+        true_df.cache()
+        fake_df.cache()
+    
+    # Register as temporary views for SQL queries
     true_df.createOrReplaceTempView("true_news")
     fake_df.createOrReplaceTempView("fake_news")
     
-    # Mostrar informações sobre os DataFrames
-    print(f"Notícias verdadeiras carregadas: {true_df.count()} registos")
-    print(f"Notícias falsas carregadas: {fake_df.count()} registos")
+    # Show information about the DataFrames
+    print(f"True news loaded: {true_df.count()} records")
+    print(f"Fake news loaded: {fake_df.count()} records")
     
     return true_df, fake_df
 
 # %% [markdown]
-# ### Funções de Processamento de Dados
+# ### Data Processing Functions
 
 # %%
-def combine_datasets(true_df, fake_df):
+def combine_datasets(true_df, fake_df, cache=True):
     """
-    Combina os DataFrames de notícias verdadeiras e falsas.
+    Combines DataFrames of true and fake news.
     
     Args:
-        true_df: DataFrame com notícias verdadeiras
-        fake_df: DataFrame com notícias falsas
+        true_df: DataFrame with true news
+        fake_df: DataFrame with fake news
+        cache (bool): Whether to cache the combined DataFrame
         
     Returns:
-        DataFrame: DataFrame combinado
+        DataFrame: Combined DataFrame
     """
-    print("A combinar datasets de notícias verdadeiras e falsas...")
+    print("Combining true and fake news datasets...")
     
-    # Verificar colunas disponíveis
+    # Check available columns
     true_cols = set(true_df.columns)
     fake_cols = set(fake_df.columns)
     common_cols = true_cols.intersection(fake_cols)
     
-    print(f"Colunas comuns: {common_cols}")
+    print(f"Common columns: {common_cols}")
     
-    # Selecionar colunas comuns para garantir compatibilidade
+    # Select common columns to ensure compatibility
     if "title" in common_cols and "text" in common_cols:
-        # Se tiver título e texto, combinar para melhor contexto
+        # If we have title and text, combine for better context
         true_df = true_df.select("title", "text", "label")
         fake_df = fake_df.select("title", "text", "label")
         
-        # Combinar título e texto para melhor contexto
+        # Combine title and text for better context
         true_df = true_df.withColumn("full_text", 
                                     concat(col("title"), lit(". "), col("text")))
         fake_df = fake_df.withColumn("full_text", 
                                     concat(col("title"), lit(". "), col("text")))
         
-        # Selecionar colunas finais
+        # Select final columns
         true_df = true_df.select("full_text", "label")
         fake_df = fake_df.select("full_text", "label")
         
-        # Renomear coluna
+        # Rename column
         true_df = true_df.withColumnRenamed("full_text", "text")
         fake_df = fake_df.withColumnRenamed("full_text", "text")
     else:
-        # Caso contrário, usar apenas texto e etiqueta
+        # Otherwise, just use text and label
         true_df = true_df.select("text", "label")
         fake_df = fake_df.select("text", "label")
     
-    # Combinar datasets
+    # Combine datasets
     combined_df = true_df.unionByName(fake_df)
     
-    # Mostrar informações sobre o DataFrame combinado
-    print(f"Dataset combinado: {combined_df.count()} registos")
-    print(f"Distribuição de etiquetas:")
+    # Cache the combined DataFrame if requested
+    if cache:
+        combined_df.cache()
+    
+    # Show information about the combined DataFrame
+    print(f"Combined dataset: {combined_df.count()} records")
+    print(f"Label distribution:")
     combined_df.groupBy("label").count().show()
+    
+    # Unpersist individual DataFrames to free up memory
+    true_df.unpersist()
+    fake_df.unpersist()
     
     return combined_df
 
 # %%
-def preprocess_text(df):
+def preprocess_text(df, cache=True):
     """
-    Pré-processa o texto, convertendo para minúsculas e removendo caracteres especiais.
+    Preprocesses text by converting to lowercase and removing special characters.
+    Also checks for and removes problematic columns that may cause data leakage.
     
     Args:
-        df: DataFrame com coluna de texto
+        df: DataFrame with text column
+        cache (bool): Whether to cache the preprocessed DataFrame
         
     Returns:
-        DataFrame: DataFrame com texto pré-processado
+        DataFrame: DataFrame with preprocessed text
     """
-    print("A pré-processar texto...")
+    print("Preprocessing text...")
     
-    # Converter para minúsculas
+    # Convert to lowercase
     df = df.withColumn("text", lower(col("text")))
     
-    # Remover caracteres especiais
+    # Remove special characters
     df = df.withColumn("text", regexp_replace(col("text"), "[^a-zA-Z0-9\\s]", " "))
     
-    # Remover espaços múltiplos
+    # Remove multiple spaces
     df = df.withColumn("text", regexp_replace(col("text"), "\\s+", " "))
     
-    # Verificar se há colunas problemáticas que podem causar data leakage
+    # Check for problematic columns that may cause data leakage
     if "subject" in df.columns:
-        print("\nAVISO: A remover coluna 'subject' para evitar data leakage")
-        print("A coluna 'subject' discrimina perfeitamente entre notícias verdadeiras e falsas")
-        print("Notícias verdadeiras: subject='politicsNews', Notícias falsas: subject='News'")
+        print("\nWARNING: Removing 'subject' column to prevent data leakage")
+        print("The 'subject' column perfectly discriminates between true and fake news")
+        print("True news: subject='politicsNews', Fake news: subject='News'")
         df = df.drop("subject")
-        print("Coluna 'subject' removida com sucesso")
+        print("'subject' column successfully removed")
+    
+    # Cache the preprocessed DataFrame if requested
+    if cache:
+        df.cache()
     
     return df
 
 # %%
-def create_balanced_sample(df, sample_size=1000, seed=42):
+def create_balanced_sample(df, sample_size=1000, seed=42, cache=True):
     """
-    Cria uma amostra balanceada do dataset.
+    Creates a balanced sample of the dataset.
     
     Args:
-        df: DataFrame com dados
-        sample_size (int): Tamanho da amostra para cada classe
-        seed (int): Semente para reprodutibilidade
+        df: DataFrame with data
+        sample_size (int): Sample size for each class
+        seed (int): Seed for reproducibility
+        cache (bool): Whether to cache the sample DataFrame
         
     Returns:
-        DataFrame: Amostra balanceada
+        DataFrame: Balanced sample
     """
-    print(f"A criar amostra balanceada com {sample_size} registos por classe...")
+    print(f"Creating balanced sample with {sample_size} records per class...")
     
-    # Amostra de notícias verdadeiras (label=1)
+    # Sample of true news (label=1)
     real_sample = df.filter(col("label") == 1) \
                     .orderBy(rand(seed=seed)) \
                     .limit(sample_size)
     
-    # Amostra de notícias falsas (label=0)
+    # Sample of fake news (label=0)
     fake_sample = df.filter(col("label") == 0) \
                     .orderBy(rand(seed=seed)) \
                     .limit(sample_size)
     
-    # Combinar as amostras
+    # Combine the samples
     sample_df = real_sample.unionByName(fake_sample)
     
-    # Registar o DataFrame de amostra como uma vista temporária
+    # Cache the sample DataFrame if requested
+    if cache:
+        sample_df.cache()
+    
+    # Register the sample DataFrame as a temporary view
     sample_df.createOrReplaceTempView("sample_news")
     
-    # Mostrar estatísticas da amostra
-    print("\nEstatísticas da amostra:")
+    # Show sample statistics
+    print("\nSample statistics:")
     spark.sql("""
         SELECT 
             label, 
@@ -262,19 +374,19 @@ def create_balanced_sample(df, sample_size=1000, seed=42):
     return sample_df
 
 # %% [markdown]
-# ### Funções de Armazenamento de Dados
+# ### Data Storage Functions
 
 # %%
 def save_to_parquet(df, path, partition_by=None):
     """
-    Guarda um DataFrame em formato Parquet.
+    Saves a DataFrame in Parquet format.
     
     Args:
-        df: DataFrame a guardar
-        path (str): Caminho onde guardar o DataFrame
-        partition_by (str): Coluna para particionar (opcional)
+        df: DataFrame to save
+        path (str): Path where to save the DataFrame
+        partition_by (str): Column to partition by (optional)
     """
-    print(f"A guardar DataFrame em {path}...")
+    print(f"Saving DataFrame to {path}...")
     
     writer = df.write.mode("overwrite")
     
@@ -282,19 +394,19 @@ def save_to_parquet(df, path, partition_by=None):
         writer = writer.partitionBy(partition_by)
     
     writer.parquet(path)
-    print(f"DataFrame guardado em {path}")
+    print(f"DataFrame saved to {path}")
 
 # %%
 def save_to_hive_table(df, table_name, partition_by=None):
     """
-    Guarda um DataFrame numa tabela Hive.
+    Saves a DataFrame to a Hive table.
     
     Args:
-        df: DataFrame a guardar
-        table_name (str): Nome da tabela Hive a criar ou substituir
-        partition_by (str): Coluna para particionar (opcional)
+        df: DataFrame to save
+        table_name (str): Name of the Hive table to create or replace
+        partition_by (str): Column to partition by (optional)
     """
-    print(f"A guardar DataFrame na tabela Hive {table_name}...")
+    print(f"Saving DataFrame to Hive table {table_name}...")
     
     writer = df.write.mode("overwrite").format("parquet")
     
@@ -302,45 +414,45 @@ def save_to_hive_table(df, table_name, partition_by=None):
         writer = writer.partitionBy(partition_by)
     
     writer.saveAsTable(table_name)
-    print(f"DataFrame guardado na tabela Hive: {table_name}")
+    print(f"DataFrame saved to Hive table: {table_name}")
 
 # %% [markdown]
-# ### Funções de Análise de Dados
+# ### Data Analysis Functions
 
 # %%
 def analyze_dataset_characteristics(df):
     """
-    Analisa características do dataset para identificar potenciais problemas.
+    Analyzes dataset characteristics to identify potential issues.
     
     Args:
-        df: DataFrame com colunas de texto e etiqueta
+        df: DataFrame with text and label columns
         
     Returns:
-        dict: Dicionário com resultados da análise
+        dict: Dictionary with analysis results
     """
-    print("A analisar características do dataset...")
+    print("Analyzing dataset characteristics...")
     
-    # Converter para pandas para análise mais fácil
+    # Convert to pandas for easier analysis
     pandas_df = df.toPandas()
     
-    # Calcular estatísticas básicas
+    # Calculate basic statistics
     total_samples = len(pandas_df)
     class_distribution = pandas_df['label'].value_counts().to_dict()
     class_balance = min(class_distribution.values()) / max(class_distribution.values())
     
-    # Calcular estatísticas de comprimento de texto
+    # Calculate text length statistics
     pandas_df['text_length'] = pandas_df['text'].apply(len)
     avg_text_length = pandas_df['text_length'].mean()
     min_text_length = pandas_df['text_length'].min()
     max_text_length = pandas_df['text_length'].max()
     
-    # Verificar textos vazios ou muito curtos
+    # Check for empty or very short texts
     short_texts = (pandas_df['text_length'] < 10).sum()
     
-    # Verificar textos duplicados
+    # Check for duplicate texts
     duplicate_texts = pandas_df['text'].duplicated().sum()
     
-    # Compilar resultados
+    # Compile results
     results = {
         'total_samples': total_samples,
         'class_distribution': class_distribution,
@@ -352,32 +464,32 @@ def analyze_dataset_characteristics(df):
         'duplicate_texts': duplicate_texts
     }
     
-    # Imprimir resumo
-    print("Características do Dataset:")
-    print(f"Total de amostras: {total_samples}")
-    print(f"Distribuição de classes: {class_distribution}")
-    print(f"Rácio de equilíbrio de classes: {class_balance:.2f}")
-    print(f"Comprimento médio de texto: {avg_text_length:.2f} caracteres")
-    print(f"Intervalo de comprimento de texto: {min_text_length} a {max_text_length} caracteres")
-    print(f"Número de textos muito curtos (<10 chars): {short_texts}")
-    print(f"Número de textos duplicados: {duplicate_texts}")
+    # Print summary
+    print("Dataset Characteristics:")
+    print(f"Total samples: {total_samples}")
+    print(f"Class distribution: {class_distribution}")
+    print(f"Class balance ratio: {class_balance:.2f}")
+    print(f"Average text length: {avg_text_length:.2f} characters")
+    print(f"Text length range: {min_text_length} to {max_text_length} characters")
+    print(f"Number of very short texts (<10 chars): {short_texts}")
+    print(f"Number of duplicate texts: {duplicate_texts}")
     
-    # Criar gráficos
+    # Create plots
     plt.figure(figsize=(12, 5))
     
-    # Gráfico de distribuição de classes
+    # Class distribution plot
     plt.subplot(1, 2, 1)
     sns.countplot(x='label', data=pandas_df)
-    plt.title('Distribuição de Classes')
-    plt.xlabel('Classe (0=Falsa, 1=Verdadeira)')
-    plt.ylabel('Contagem')
+    plt.title('Class Distribution')
+    plt.xlabel('Class (0=Fake, 1=True)')
+    plt.ylabel('Count')
     
-    # Gráfico de distribuição de comprimento de texto
+    # Text length distribution plot
     plt.subplot(1, 2, 2)
     sns.histplot(pandas_df['text_length'], bins=30)
-    plt.title('Distribuição de Comprimento de Texto')
-    plt.xlabel('Comprimento (caracteres)')
-    plt.ylabel('Contagem')
+    plt.title('Text Length Distribution')
+    plt.xlabel('Length (characters)')
+    plt.ylabel('Count')
     
     plt.tight_layout()
     plt.show()
@@ -385,7 +497,7 @@ def analyze_dataset_characteristics(df):
     return results
 
 # %% [markdown]
-# ## Pipeline Completo de Ingestão de Dados
+# ## Complete Data Ingestion Pipeline
 
 # %%
 def process_and_save_data(fake_path="/FileStore/tables/fake.csv", 
@@ -393,158 +505,230 @@ def process_and_save_data(fake_path="/FileStore/tables/fake.csv",
                          output_dir="dbfs:/FileStore/fake_news_detection/data",
                          create_tables=True):
     """
-    Processa e guarda dados de notícias falsas e verdadeiras.
+    Processes and saves fake and true news data.
     
-    Este pipeline completo carrega os dados CSV, combina datasets, cria amostras,
-    e guarda os resultados em formato Parquet e como tabelas Hive.
+    This complete pipeline loads CSV data, combines datasets, creates samples,
+    and saves results in Parquet format and as Hive tables.
     
     Args:
-        fake_path (str): Caminho para o ficheiro CSV de notícias falsas
-        true_path (str): Caminho para o ficheiro CSV de notícias verdadeiras
-        output_dir (str): Diretório para guardar dados processados
-        create_tables (bool): Se deve criar tabelas Hive
+        fake_path (str): Path to the CSV file with fake news
+        true_path (str): Path to the CSV file with true news
+        output_dir (str): Directory to save processed data
+        create_tables (bool): Whether to create Hive tables
         
     Returns:
-        dict: Dicionário com referências aos DataFrames processados
+        dict: Dictionary with references to processed DataFrames
     """
-    print("A iniciar pipeline de processamento de dados...")
+    print("Starting data processing pipeline...")
     
-    # 1. Carregar ficheiros CSV
+    # 0. Create directory structure
+    directories = create_directory_structure()
+    
+    # 1. Load CSV files
     fake_df, true_df = load_csv_files(fake_path, true_path)
     
-    # 2. Criar tabelas Hive (opcional)
+    # 2. Create Hive tables (optional)
     if create_tables:
         create_hive_tables(fake_df, true_df)
     
-    # 3. Combinar datasets
+    # 3. Combine datasets
     combined_df = combine_datasets(true_df, fake_df)
     
-    # 4. Pré-processar texto
+    # 4. Preprocess text
     combined_df = preprocess_text(combined_df)
     
-    # 5. Criar amostra balanceada
+    # 5. Create balanced sample
     sample_df = create_balanced_sample(combined_df)
     
-    # 6. Analisar características do dataset
+    # 6. Analyze dataset characteristics
     analyze_dataset_characteristics(combined_df)
     
-    # 7. Guardar dataset combinado em DBFS
+    # 7. Save combined dataset to DBFS
     combined_path = f"{output_dir}/combined_data/combined_news.parquet"
     save_to_parquet(combined_df, combined_path, partition_by="label")
     
-    # 8. Guardar amostra em DBFS
+    # 8. Save sample to DBFS
     sample_path = f"{output_dir}/sample_data/sample_news.parquet"
     save_to_parquet(sample_df, sample_path)
     
-    # 9. Guardar em tabelas Hive para acesso mais fácil
+    # 9. Save to Hive tables for easier access
     save_to_hive_table(combined_df, "combined_news", partition_by="label")
     save_to_hive_table(sample_df, "sample_news")
     
-    print("\nPipeline de processamento de dados concluído com sucesso!")
+    # 10. Unpersist DataFrames to free up memory
+    combined_df.unpersist()
+    sample_df.unpersist()
+    
+    print("\nData processing pipeline completed successfully!")
     
     return {
         "true_df": true_df,
         "fake_df": fake_df,
         "combined_df": combined_df,
-        "sample_df": sample_df
+        "sample_df": sample_df,
+        "directories": directories
     }
 
 # %% [markdown]
-# ## Tutorial Passo a Passo
-
-# %% [markdown]
-# ### 1. Carregar Dados CSV
+# ## Memory Management Best Practices
 
 # %%
-# Definir caminhos dos ficheiros CSV
-# Nota: Ajuste os caminhos conforme necessário para o seu ambiente
+def optimize_memory_usage():
+    """
+    Displays best practices for memory management in Databricks Community Edition.
+    """
+    print("Memory Management Best Practices for Databricks Community Edition:")
+    print("\n1. Cache and Unpersist Strategy:")
+    print("   - Cache DataFrames only when they will be reused multiple times")
+    print("   - Always unpersist DataFrames when they are no longer needed")
+    print("   - Monitor memory usage with Spark UI")
+    
+    print("\n2. Partition Management:")
+    print("   - Use appropriate number of partitions (8-16 for Community Edition)")
+    print("   - Repartition large DataFrames to avoid memory issues")
+    print("   - Use coalesce() for reducing partitions without shuffle")
+    
+    print("\n3. Column Pruning:")
+    print("   - Select only necessary columns as early as possible")
+    print("   - Drop unnecessary columns to reduce memory footprint")
+    
+    print("\n4. Checkpointing:")
+    print("   - Use checkpointing for complex operations to truncate lineage")
+    print("   - Set checkpoint directory with spark.sparkContext.setCheckpointDir()")
+    
+    print("\n5. Broadcast Variables:")
+    print("   - Use broadcast variables for small lookup tables")
+    print("   - Example: broadcast(small_df).value for joins")
+    
+    print("\n6. Garbage Collection:")
+    print("   - Monitor GC with spark.conf.get('spark.executor.extraJavaOptions')")
+    print("   - Consider adding -XX:+PrintGCDetails to Java options")
+    
+    print("\nImplemented in this notebook:")
+    print("- Strategic caching of DataFrames")
+    print("- Explicit unpersist calls when DataFrames are no longer needed")
+    print("- Early column selection to reduce memory footprint")
+    print("- Appropriate partition management")
+
+# %% [markdown]
+# ## Step-by-Step Tutorial
+
+# %% [markdown]
+# ### 1. Set Up Directory Structure
+
+# %%
+# Create necessary directories
+directories = create_directory_structure()
+print(f"Working with directories: {directories}")
+
+# %% [markdown]
+# ### 2. Load CSV Data
+
+# %%
+# Define paths to CSV files
+# Note: Adjust paths as needed for your environment
 fake_path = "/FileStore/tables/fake.csv"
 true_path = "/FileStore/tables/real.csv"
 
-# Carregar os ficheiros CSV
+# Load the CSV files
 fake_df, true_df = load_csv_files(fake_path, true_path)
 
 # %% [markdown]
-# ### 2. Criar Tabelas Hive
+# ### 3. Create Hive Tables
 
 # %%
-# Criar tabelas Hive para os dados
+# Create Hive tables
 create_hive_tables(fake_df, true_df)
 
 # %% [markdown]
-# ### 3. Carregar Dados das Tabelas Hive
+# ### 4. Combine Datasets
 
 # %%
-# Carregar dados das tabelas Hive
-true_df, fake_df = load_data_from_hive()
-
-# %% [markdown]
-# ### 4. Combinar e Pré-processar Dados
-
-# %%
-# Combinar datasets
+# Combine true and fake news datasets
 combined_df = combine_datasets(true_df, fake_df)
 
-# Pré-processar texto
+# %% [markdown]
+# ### 5. Preprocess Text
+
+# %%
+# Preprocess text data
 combined_df = preprocess_text(combined_df)
 
 # %% [markdown]
-# ### 5. Criar Amostra Balanceada
+# ### 6. Create Balanced Sample
 
 # %%
-# Criar amostra balanceada
-sample_df = create_balanced_sample(combined_df)
+# Create a balanced sample
+sample_df = create_balanced_sample(combined_df, sample_size=1000)
 
 # %% [markdown]
-# ### 6. Analisar Características do Dataset
+# ### 7. Analyze Dataset Characteristics
 
 # %%
-# Analisar características do dataset
-results = analyze_dataset_characteristics(combined_df)
+# Analyze dataset characteristics
+analysis_results = analyze_dataset_characteristics(combined_df)
 
 # %% [markdown]
-# ### 7. Guardar Dados Processados
+# ### 8. Save Data to Parquet
 
 # %%
-# Definir diretório de saída
-output_dir = "dbfs:/FileStore/fake_news_detection/data"
+# Save combined dataset to Parquet
+save_to_parquet(combined_df, f"{directories['processed_data']}/combined_news.parquet", partition_by="label")
 
-# Guardar dataset combinado em DBFS
-combined_path = f"{output_dir}/combined_data/combined_news.parquet"
-save_to_parquet(combined_df, combined_path, partition_by="label")
-
-# Guardar amostra em DBFS
-sample_path = f"{output_dir}/sample_data/sample_news.parquet"
-save_to_parquet(sample_df, sample_path)
+# Save sample to Parquet
+save_to_parquet(sample_df, f"{directories['sample_data']}/sample_news.parquet")
 
 # %% [markdown]
-# ### 8. Guardar em Tabelas Hive
+# ### 9. Save to Hive Tables
 
 # %%
-# Guardar em tabelas Hive para acesso mais fácil
+# Save to Hive tables
 save_to_hive_table(combined_df, "combined_news", partition_by="label")
 save_to_hive_table(sample_df, "sample_news")
 
 # %% [markdown]
-# ### 9. Pipeline Completo (Alternativa)
+# ### 10. Clean Up Memory
 
 # %%
-# Executar o pipeline completo de uma só vez
-# Descomente a linha abaixo para executar
-# result = process_and_save_data()
+# Unpersist DataFrames to free up memory
+combined_df.unpersist()
+sample_df.unpersist()
+fake_df.unpersist()
+true_df.unpersist()
+
+# Display memory management best practices
+optimize_memory_usage()
 
 # %% [markdown]
-# ## Notas Importantes
+# ## Run Complete Pipeline
+
+# %%
+# Run the complete data ingestion pipeline
+results = process_and_save_data(
+    fake_path="/FileStore/tables/fake.csv",
+    true_path="/FileStore/tables/real.csv",
+    output_dir="dbfs:/FileStore/fake_news_detection/data",
+    create_tables=True
+)
+
+# %% [markdown]
+# ## Important Notes
 # 
-# 1. **Caminhos de Ficheiros**: Ajuste os caminhos dos ficheiros CSV conforme necessário para o seu ambiente Databricks.
+# 1. **Directory Structure**: The `create_directory_structure()` function must be called before running the pipeline to ensure all necessary directories exist.
 # 
-# 2. **Memória e Recursos**: O código está otimizado para o Databricks Community Edition, mas pode ser necessário ajustar as configurações de memória e partições dependendo do tamanho dos seus dados.
+# 2. **Data Leakage**: The 'subject' column in the original datasets perfectly separates fake from true news, which would cause data leakage. This column is automatically removed during preprocessing.
 # 
-# 3. **Data Leakage**: O código remove automaticamente a coluna "subject" para evitar data leakage, pois esta coluna discrimina perfeitamente entre notícias verdadeiras e falsas.
+# 3. **Memory Management**: Databricks Community Edition has limited memory. The functions in this notebook implement best practices for memory management:
+#    - Strategic caching of DataFrames
+#    - Explicit unpersist calls when DataFrames are no longer needed
+#    - Early column selection to reduce memory footprint
 # 
-# 4. **Armazenamento**: Os dados processados são guardados em formato Parquet e como tabelas Hive para facilitar o acesso em notebooks subsequentes.
+# 4. **File Paths**: The default paths assume files are uploaded to Databricks FileStore. Adjust paths as needed for your environment.
 # 
-# 5. **Conversão para .ipynb**: Este ficheiro .py pode ser facilmente convertido para um notebook .ipynb usando jupytext:
-#    ```
-#    jupytext --to notebook 01_data_ingestion_standalone.py
-#    ```
+# 5. **Hive Tables**: Creating Hive tables is optional but recommended for easier data access in subsequent notebooks.
+# 
+# 6. **Balanced Sample**: A balanced sample is created for exploratory analysis and initial model development. The full dataset should be used for final model training.
+# 
+# 7. **Partitioning**: Data is partitioned by label when saved to improve query performance when filtering by class.
+# 
+# 8. **Reproducibility**: A fixed seed is used for sampling to ensure reproducible results.
